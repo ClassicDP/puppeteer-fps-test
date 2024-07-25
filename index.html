@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas Screenshot</title>
+    <style>
+        body {
+            font-family: monospace;
+            background-color: white;
+            color: black;
+        }
+        #time {
+            font-size: 10px;
+        }
+    </style>
+</head>
+<body>
+<div id="time">Loading...</div>
+<canvas id="canvas" width="96" height="32" style="display:none;"></canvas>
+<script>
+    const timeDiv = document.getElementById('time');
+    const canvas = document.getElementById('canvas');
+    const context = canvas.getContext('2d');
+    const ws = new WebSocket('ws://localhost:8080');
+
+    let frameCount = 0;
+
+    ws.onopen = () => {
+        console.log('WebSocket connection established');
+        updateCanvas();
+        setInterval(() => {
+            const fpsMessage = `FPS:${frameCount}`;
+            ws.send(fpsMessage);
+            frameCount = 0;
+        }, 1000); // отправляем количество кадров в секунду на сервер
+    };
+
+    function updateCanvas() {
+        const now = new Date();
+        const timeString = now.toTimeString().split(' ')[0] + '.' + now.getMilliseconds();
+        timeDiv.innerText = timeString;
+
+        // Wait for the text to render
+        requestAnimationFrame(() => {
+            // Copy the rendered text into the canvas
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.fillStyle = 'white';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.fillStyle = 'black';
+            context.font = '10px monospace';
+            context.fillText(timeString, 10, 20);
+
+            // Send the canvas content to the server as binary data
+            canvas.toBlob((blob) => {
+                if (blob) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        const arrayBuffer = reader.result;
+                        ws.send(arrayBuffer);
+                    };
+                    reader.readAsArrayBuffer(blob);
+                }
+            });
+
+            frameCount++;
+
+            // Schedule the next update
+            requestAnimationFrame(updateCanvas); // обновление как можно быстрее
+        });
+    }
+</script>
+</body>
+</html>

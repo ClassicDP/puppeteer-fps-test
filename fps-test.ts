@@ -1,97 +1,127 @@
 import puppeteer, { Browser, Page } from 'puppeteer';
+import WebSocket from 'ws';
 import fs from 'fs';
 
-const NUM_FRAMES = 50;  // Увеличим количество кадров
-const FRAME_HEIGHT = 16;
+const width = 96;
+const height = 32;
+const duration = 1000; // Продолжительность теста в миллисекундах
 
-async function setupPage(browser: Browser, width: number, height: number): Promise<Page> {
+async function setupPage(browser: Browser): Promise<Page> {
     const page = await browser.newPage();
-    await page.setViewport({ width, height: height * NUM_FRAMES, deviceScaleFactor: 1 });
-
-    await page.setRequestInterception(true);
-    page.on('request', request => {
-        if (['image', 'stylesheet', 'font'].includes(request.resourceType())) {
-            request.abort();
-        } else {
-            request.continue();
-        }
-    });
-
-    let frameDivs = '';
-    for (let i = 0; i < NUM_FRAMES; i++) {
-        frameDivs += `
-            <div class="frame" style="width: ${width}px; height: ${FRAME_HEIGHT}px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-bottom: 1px solid #ccc;">
-                <p class="time" style="margin: 0; padding: 0;"></p>
-                <p class="date" style="margin: 0; padding: 0;"></p>
-            </div>
-        `;
-    }
+    await page.setViewport({ width, height });
 
     await page.setContent(`
-        <div id="content" style="width: ${width}px; height: ${height * NUM_FRAMES}px; font-size: 8px; background-color: white; color: black; font-family: monospace;">
-            ${frameDivs}
-        </div>
+        <canvas id="canvas" width="${width}" height="${height}" style="background-color: white;"></canvas>
         <script>
-            const frames = document.querySelectorAll('.frame');
-            let frameIndex = 0;
+            const canvas = document.getElementById('canvas') as HTMLCanvasElement;
+            const context = canvas.getContext('2d');
+            let frameCount = 0;
 
-            function updateFrames() {
+            function updateCanvas() {
+                if (!context) return;
                 const now = new Date();
-                frames[frameIndex].querySelector('.time').innerText = now.toTimeString().split(' ')[0] + '.' + now.getMilliseconds();
-                frames[frameIndex].querySelector('.date').innerText = now.toDateString();
-                frameIndex = (frameIndex + 1) % frames.length;
-                requestAnimationFrame(updateFrames);
+                const timeString = now.toTimeString().split(' ')[0] + '.' + now.getMilliseconds();
+
+                context.clearRect(0, 0, canvas.width, canvas.height);
+                context.fillStyle = 'white';
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                context.fillStyle = 'black';
+                context.font = '10px monospace';
+                context.fillText(timeString, 10, 20);
+
+                console.log('Rendered:', timeString); // Логирование времени
+
+                frameCount++;
+                requestAnimationFrame(updateCanvas);
             }
-            updateFrames();
+
+            updateCanvas();
+
+            setInterval(() => {
+                (window as any).frameCount = frameCount;
+                frameCount = 0;
+            }, 1000);
         </script>
     `);
 
-    await page.waitForSelector('.time');
+    await page.waitForSelector('#canvas');
 
     return page;
 }
 
-async function measureScreenshotFPS(page: Page, duration: number): Promise<number> {
-    let totalScreenshots = 0;
-    let firstScreenshotSaved = false;
-    let secondScreenshotSaved = false;
+async function measureRenderFPS(page: Page, duration: number): Promise<number> {
+    let totalRenders = 0;
     const startTime = Date.now();
 
     while (Date.now() - startTime < duration) {
         try {
-            const screenshotBuffer = await page.screenshot({ encoding: 'binary' });  // Снимаем скриншот
-            totalScreenshots++;
+            const bitmap = await page.evaluate(() => {
+                const canvas = document.getElementById('canvas') as HTMLCanvasElement;
+                if (!canvas) return null;
+                return canvas.toDataURL('image/png');
+            });
 
-            // Сохраняем первые два скриншота
-            if (!firstScreenshotSaved) {
-                fs.writeFileSync('screenshot1.png', screenshotBuffer);
-                firstScreenshotSaved = true;
-            } else if (!secondScreenshotSaved) {
-                fs.writeFileSync('screenshot2.png', screenshotBuffer);
-                secondScreenshotSaved = true;
+            if (bitmap) {
+                const buffer = Buffer.from(bitmap.split(',')[1], 'base64');
+                totalRenders++;
+
+                if (totalRenders === 1) {
+                    fs.writeFileSync('bitmap1.png', buffer);
+                    console.log('Saved bitmap1.png');
+                } else if (totalRenders === 10) {
+                    fs.writeFileSync('bitmap10.png', buffer);
+                    console.log('Saved bitmap10.png');
+                    break;
+                }
             }
         } catch (error) {
-            console.error('Screenshot error:', error);
+            console.error('Render error:', error);
             break;
         }
     }
 
     const elapsedSeconds = (Date.now() - startTime) / 1000;
-    const fps = totalScreenshots / elapsedSeconds;
+    const fps = totalRenders / elapsedSeconds;
 
     return fps;
 }
 
-(async () => {
-    const width = 96;
-    const height = FRAME_HEIGHT;
-    const duration = 1000; // Продолжительность теста в миллисекундах (1 секунда)
-
+async function main() {
     const browser = await puppeteer.launch({ headless: true });
-    const page = await setupPage(browser, width, height);
+    const page = await setupPage(browser);
 
-    const fps = await measureScreenshotFPS(page, duration);
-    console.log(`Screenshot FPS for ${width}x${FRAME_HEIGHT * NUM_FRAMES} matrix: ${fps.toFixed(2)}`);
+    const wsServer = new WebSocket.Server({ port: 8080 });
+    wsServer.on('connection', (ws) => {
+        console.log('WebSocket client connected');
+
+        const sendFrame = async () => {
+            const bitmap = await page.evaluate(() => {
+                const canvas = document.getElementById('canvas') as HTMLCanvasElement;
+                if (!canvas) return null;
+                return canvas.toDataURL('image/png');
+            });
+
+            if (bitmap) {
+                const buffer = Buffer.from(bitmap.split(',')[1], 'base64');
+                ws.send(buffer);
+            }
+        };
+
+        const sendFrames = setInterval(sendFrame, 1000 / 30); // 30 FPS
+
+        ws.on('close', () => {
+            clearInterval(sendFrames);
+            console.log('WebSocket client disconnected');
+        });
+    });
+
+    console.log('WebSocket server started on ws://localhost:8080');
+
+    // Измерение FPS и сохранение первого и десятого скриншотов
+    const fps = await measureRenderFPS(page, duration);
+    console.log(`Render FPS for ${width}x${height} matrix: ${fps.toFixed(2)}`);
 
     await browser.close();
-})();
+}
+
+main();
