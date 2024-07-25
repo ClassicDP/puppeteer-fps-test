@@ -2,73 +2,98 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=96, initial-scale=1.0">
     <title>Canvas Screenshot</title>
     <style>
-        body {
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            width: 96px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             font-family: monospace;
-            background-color: white;
-            color: black;
+            background-color: black;
+        }
+        #content {
+            position: relative;
+            width: 96px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         #time {
             font-size: 10px;
+            font-weight: bold;
+            background: linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet);
+            background-size: 400%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: rainbow 2s linear infinite;
+        }
+        @keyframes rainbow {
+            0% {
+                background-position: 0%;
+            }
+            100% {
+                background-position: 400%;
+            }
         }
     </style>
 </head>
 <body>
-<div id="time">Loading...</div>
+<div id="content">
+    <div id="time">Loading...</div>
+</div>
 <canvas id="canvas" width="96" height="32" style="display:none;"></canvas>
 <script>
     const timeDiv = document.getElementById('time');
     const canvas = document.getElementById('canvas');
-    const context = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d');
     const ws = new WebSocket('ws://localhost:8080');
-
     let frameCount = 0;
+    let lastTimestamp = 0;
 
-    ws.onopen = () => {
+    ws.onopen = function() {
         console.log('WebSocket connection established');
-        updateCanvas();
-        setInterval(() => {
-            const fpsMessage = `FPS:${frameCount}`;
-            ws.send(fpsMessage);
-            frameCount = 0;
-        }, 1000); // отправляем количество кадров в секунду на сервер
+        requestAnimationFrame(updateFrame);
     };
 
-    function updateCanvas() {
+    function updateFrame(timestamp) {
+        if (!lastTimestamp || timestamp - lastTimestamp >= 1000) {
+            // Update FPS every second
+            ws.send(`FPS: ${frameCount}`);
+            frameCount = 0;
+            lastTimestamp = timestamp;
+        }
+
         const now = new Date();
-        const timeString = now.toTimeString().split(' ')[0] + '.' + now.getMilliseconds();
-        timeDiv.innerText = timeString;
+        const timeString = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}.${now.getMilliseconds()}`;
+        timeDiv.textContent = timeString;
 
-        // Wait for the text to render
-        requestAnimationFrame(() => {
-            // Copy the rendered text into the canvas
-            context.clearRect(0, 0, canvas.width, canvas.height);
-            context.fillStyle = 'white';
-            context.fillRect(0, 0, canvas.width, canvas.height);
-            context.fillStyle = 'black';
-            context.font = '10px monospace';
-            context.fillText(timeString, 10, 20);
+        // Draw the time string to canvas for transfer
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'black';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'white';
+        ctx.font = '10px monospace';
+        ctx.fillText(timeString, 10, 20);
 
-            // Send the canvas content to the server as binary data
-            canvas.toBlob((blob) => {
-                if (blob) {
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                        const arrayBuffer = reader.result;
-                        ws.send(arrayBuffer);
-                    };
-                    reader.readAsArrayBuffer(blob);
-                }
-            });
-
-            frameCount++;
-
-            // Schedule the next update
-            requestAnimationFrame(updateCanvas); // обновление как можно быстрее
+        canvas.toBlob(blob => {
+            if (blob) {
+                ws.send(blob);
+            }
         });
+
+        frameCount++;
+        requestAnimationFrame(updateFrame);
     }
+
+    // Start the initial update
+    requestAnimationFrame(updateFrame);
 </script>
 </body>
 </html>
