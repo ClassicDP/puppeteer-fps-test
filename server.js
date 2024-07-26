@@ -1,40 +1,55 @@
-const WebSocket = require('ws');
+const puppeteer = require('puppeteer');
 const fs = require('fs');
-const path = require('path');
 
-const wss = new WebSocket.Server({ port: 8080 });
+(async () => {
+    const browser = await puppeteer.launch({
+        headless: true,
+        args: [
+            '--disable-gpu',
+            '--disable-dev-shm-usage',
+            '--disable-setuid-sandbox',
+            '--no-first-run',
+            '--no-sandbox',
+            '--no-zygote',
+            '--single-process'
+        ]
+    });
+    const page = await browser.newPage();
+    await page.setViewport({ width: 96, height: 32 });
+    await page.goto(`file://${__dirname}/index.html`, { waitUntil: 'networkidle2' });
 
-wss.on('connection', (ws) => {
-    console.log('WebSocket client connected');
+    let frameCount = 0;
+    let firstScreenshotSaved = false;
+    let secondScreenshotSaved = false;
+    let startTime = Date.now();
 
-    let imageIndex = 1;
+    async function captureScreenshot() {
+        const screenshotBuffer = await page.screenshot({ encoding: 'binary' });
 
-    ws.on('message', (message) => {
-        if (Buffer.isBuffer(message)) {
-            const messageString = message.toString();
-            if (messageString.startsWith('FPS:')) {
-                console.log(messageString); // Выводим FPS в лог
-            } else {
-                try {
-                    const buffer = Buffer.from(message);
-                    if (imageIndex === 1 || imageIndex === 100) {
-                        const filename = `screenshot${imageIndex}.png`;
-                        fs.writeFileSync(path.join(__dirname, filename), buffer);
-                        console.log(`Saved ${filename}`);
-                    }
-                    imageIndex++;
-                } catch (error) {
-                    console.error('Failed to process message:', error);
-                }
-            }
-        } else {
-            console.log('Received unknown data type');
+        frameCount++;
+
+        if (frameCount === 1 && !firstScreenshotSaved) {
+            fs.writeFileSync('screenshot1.png', screenshotBuffer);
+            firstScreenshotSaved = true;
+        } else if (frameCount === 2 && !secondScreenshotSaved) {
+            fs.writeFileSync('screenshot2.png', screenshotBuffer);
+            secondScreenshotSaved = true;
         }
-    });
 
-    ws.on('close', () => {
-        console.log('WebSocket client disconnected');
-    });
-});
+        const elapsedSeconds = (Date.now() - startTime) / 1000;
+        if (elapsedSeconds >= 1) {
+            const fps = frameCount / elapsedSeconds;
+            console.log(`FPS: ${fps.toFixed(2)}`);
+            frameCount = 0;
+            startTime = Date.now();
+        }
 
-console.log('WebSocket server started on ws://localhost:8080');
+        setTimeout(captureScreenshot, 0); // Schedule next screenshot as soon as possible
+    }
+
+    captureScreenshot();
+
+    process.on('exit', async () => {
+        await browser.close();
+    });
+})();

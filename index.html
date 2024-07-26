@@ -17,14 +17,6 @@
             font-family: monospace;
             background-color: black;
         }
-        #content {
-            position: relative;
-            width: 96px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
         #time {
             font-size: 10px;
             font-weight: bold;
@@ -45,55 +37,16 @@
     </style>
 </head>
 <body>
-<div id="content">
-    <div id="time">Loading...</div>
-</div>
-<canvas id="canvas" width="96" height="32" style="display:none;"></canvas>
+<div id="time">Loading...</div>
 <script>
-    const timeDiv = document.getElementById('time');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const ws = new WebSocket('ws://localhost:8080');
-    let frameCount = 0;
-    let lastTimestamp = 0;
-
-    ws.onopen = function() {
-        console.log('WebSocket connection established');
-        requestAnimationFrame(updateFrame);
-    };
-
-    function updateFrame(timestamp) {
-        if (!lastTimestamp || timestamp - lastTimestamp >= 1000) {
-            // Update FPS every second
-            ws.send(`FPS: ${frameCount}`);
-            frameCount = 0;
-            lastTimestamp = timestamp;
-        }
-
+    function updateTime() {
         const now = new Date();
         const timeString = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}.${now.getMilliseconds()}`;
-        timeDiv.textContent = timeString;
-
-        // Draw the time string to canvas for transfer
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = 'black';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = 'white';
-        ctx.font = '10px monospace';
-        ctx.fillText(timeString, 10, 20);
-
-        canvas.toBlob(blob => {
-            if (blob) {
-                ws.send(blob);
-            }
-        });
-
-        frameCount++;
-        requestAnimationFrame(updateFrame);
+        document.getElementById('time').textContent = timeString;
+        requestAnimationFrame(updateTime);
     }
 
-    // Start the initial update
-    requestAnimationFrame(updateFrame);
+    requestAnimationFrame(updateTime);
 </script>
 </body>
 </html>
