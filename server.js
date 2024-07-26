@@ -11,7 +11,14 @@ const fs = require('fs');
             '--no-first-run',
             '--no-sandbox',
             '--no-zygote',
-            '--single-process'
+            '--single-process',
+            '--disable-extensions',
+            '--disable-infobars',
+            '--disable-features=NetworkService',
+            '--disable-background-timer-throttling',
+            '--disable-renderer-backgrounding',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-breakpad'
         ]
     });
     const page = await browser.newPage();
