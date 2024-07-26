@@ -9,10 +9,17 @@ const getStockData = async () => {
         const response = await fetch('https://www.cbr.ru/scripts/XML_daily.asp');
         const text = await response.text();
         const dom = new JSDOM(text);
-        const usdElement = Array.from(dom.window.document.getElementsByTagName("Valute"))
-            .find(node => node.getElementsByTagName("CharCode")[0].textContent === "USD");
-        const usdRate = usdElement.getElementsByTagName("Value")[0].textContent;
-        return usdRate;
+
+        const getValue = (charCode) => {
+            const element = Array.from(dom.window.document.getElementsByTagName("Valute"))
+                .find(node => node.getElementsByTagName("CharCode")[0].textContent === charCode);
+            return element ? element.getElementsByTagName("Value")[0].textContent : null;
+        };
+
+        const usdRate = getValue("USD");
+        const cnyRate = getValue("CNY");
+
+        return { usdRate, cnyRate };
     } catch (error) {
         console.error('Error fetching stock data:', error);
         return null;
@@ -21,14 +28,14 @@ const getStockData = async () => {
 
 http.createServer(async (req, res) => {
     if (req.url === '/stock') {
-        const usdToRub = await getStockData();
+        const stockData = await getStockData();
         res.writeHead(200, {
             'Content-Type': 'application/json',
             'Access-Control-Allow-Origin': '*', // Разрешить все источники
             'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS', // Разрешить методы
             'Access-Control-Allow-Headers': 'Content-Type' // Разрешить заголовки
         });
-        res.end(JSON.stringify({ usdToRub }));
+        res.end(JSON.stringify(stockData));
     } else {
         res.writeHead(404, {
             'Content-Type': 'text/plain',
@@ -67,8 +74,10 @@ http.createServer(async (req, res) => {
 
         if (frameCount === 1 && !firstScreenshotSaved) {
             fs.writeFileSync('screenshot1.png', screenshotBuffer);
+
         } else if (frameCount === 10 && !tenthScreenshotSaved) {
             fs.writeFileSync('screenshot10.png', screenshotBuffer);
+            tenthScreenshotSaved = true;
         }
 
         const elapsedSeconds = (Date.now() - startTime) / 1000;
