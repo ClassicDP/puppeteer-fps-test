@@ -1,63 +1,53 @@
 const { webkit } = require('playwright');
 const fs = require('fs');
+const http = require('http');
+const { JSDOM } = require('jsdom');
+const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
+
+const getStockData = async () => {
+    try {
+        const response = await fetch('https://www.cbr.ru/scripts/XML_daily.asp');
+        const text = await response.text();
+        const dom = new JSDOM(text);
+        const usdElement = Array.from(dom.window.document.getElementsByTagName("Valute"))
+            .find(node => node.getElementsByTagName("CharCode")[0].textContent === "USD");
+        const usdRate = usdElement.getElementsByTagName("Value")[0].textContent;
+        return usdRate;
+    } catch (error) {
+        console.error('Error fetching stock data:', error);
+        return null;
+    }
+};
+
+http.createServer(async (req, res) => {
+    if (req.url === '/stock') {
+        const usdToRub = await getStockData();
+        res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*', // Разрешить все источники
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS', // Разрешить методы
+            'Access-Control-Allow-Headers': 'Content-Type' // Разрешить заголовки
+        });
+        res.end(JSON.stringify({ usdToRub }));
+    } else {
+        res.writeHead(404, {
+            'Content-Type': 'text/plain',
+            'Access-Control-Allow-Origin': '*' // Разрешить все источники
+        });
+        res.end('Not Found');
+    }
+}).listen(8080, () => {
+    console.log('Proxy server running on port 8080');
+});
 
 (async () => {
     const browser = await webkit.launch();
     const page = await browser.newPage();
 
-    const htmlContent = `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>HTML to PNG</title>
-        <style>
-            body {
-                margin: 0;
-                overflow: hidden;
-                background-color: black;
-                color: white;
-                font-size: 24px;
-                font-family: monospace;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                height: 100vh;
-                text-align: center;
-            }
-            .rainbow-text {
-                background-image: linear-gradient(to right, red, orange, yellow, green, blue, indigo, violet);
-                -webkit-background-clip: text;
-                color: transparent;
-                animation: rainbow-animation 1s linear infinite;
-            }
-            @keyframes rainbow-animation {
-                0% {
-                    background-position: 0% 50%;
-                }
-                100% {
-                    background-position: 100% 50%;
-                }
-            }
-        </style>
-    </head>
-    <body>
-        <div class="rainbow-text" id="time"></div>
-        <script>
-            function updateTime() {
-                const now = new Date();
-                const timeString = now.toLocaleTimeString() + '.' + now.getMilliseconds();
-                document.getElementById('time').innerText = timeString;
-                requestAnimationFrame(updateTime);
-            }
-            updateTime();
-        </script>
-    </body>
-    </html>`;
+    const htmlContent = fs.readFileSync('index.html', 'utf8');
 
     await page.setContent(htmlContent);
-    await page.setViewportSize({ width: 800, height: 600 });
+    await page.setViewportSize({ width: 96, height: 32 });
 
     let frameCount = 0;
     let firstScreenshotSaved = false;
@@ -67,21 +57,18 @@ const fs = require('fs');
     async function captureScreenshot() {
         frameCount++;
 
-        // Get the bounding box of the element to be captured
-        const elementHandle = await page.$('#time');
+        const elementHandle = await page.$('#container');
         const boundingBox = await elementHandle.boundingBox();
 
         const screenshotBuffer = await page.screenshot({
             encoding: 'binary',
-            clip: boundingBox // Only capture the bounding box area
+            clip: boundingBox
         });
 
         if (frameCount === 1 && !firstScreenshotSaved) {
             fs.writeFileSync('screenshot1.png', screenshotBuffer);
-            firstScreenshotSaved = true;
         } else if (frameCount === 10 && !tenthScreenshotSaved) {
             fs.writeFileSync('screenshot10.png', screenshotBuffer);
-            tenthScreenshotSaved = true;
         }
 
         const elapsedSeconds = (Date.now() - startTime) / 1000;

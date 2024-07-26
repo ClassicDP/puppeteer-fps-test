@@ -11,15 +11,22 @@
             overflow: hidden;
             width: 96px;
             height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: monospace;
+            font-family: "Avenir Next Condensed";
             background-color: black;
+            font-smooth: never;
+            -webkit-font-smoothing: none;
         }
-        #time {
-            font-size: 10px;
-            font-weight: bold;
+        #container {
+            width: 96px;
+            height: 32px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        #time, #stock {
+            font-size: 7pt;
+            font-weight: normal;
             background: linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet);
             background-size: 400%;
             -webkit-background-clip: text;
@@ -35,18 +42,34 @@
             }
         }
     </style>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 </head>
 <body>
-<div id="time">Loading...</div>
+<div id="container">
+    <div id="time">Loading...</div>
+    <div id="stock">Loading stock...</div>
+</div>
 <script>
     function updateTime() {
         const now = new Date();
-        const timeString = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}.${now.getMilliseconds()}`;
+        const timeString = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}.${String(now.getMilliseconds()).padStart(3, '0')}`;
         document.getElementById('time').textContent = timeString;
         requestAnimationFrame(updateTime);
     }
 
+    async function updateStock() {
+        try {
+            const response = await fetch('http://localhost:8080/stock');
+            const data = await response.json();
+            document.getElementById('stock').textContent = `USD to RUB: ${data.usdToRub}`;
+        } catch (error) {
+            document.getElementById('stock').textContent = 'Error loading stock';
+        }
+    }
+
     requestAnimationFrame(updateTime);
+    setInterval(updateStock, 60000); // Обновляем курс каждые 60 секунд
+    updateStock(); // Начальное обновление
 </script>
 </body>
 </html>
