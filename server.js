@@ -3,6 +3,7 @@ import fs from 'fs';
 import http from 'http';
 import cheerio from 'cheerio';
 import fetch from 'node-fetch';
+import WebSocket, { WebSocketServer } from 'ws';
 
 const getStockData = async () => {
     try {
@@ -25,20 +26,21 @@ const getStockData = async () => {
     }
 };
 
-http.createServer(async (req, res) => {
+// Create HTTP server for stock data proxy
+const proxyServer = http.createServer(async (req, res) => {
     if (req.url === '/stock') {
         const stockData = await getStockData();
         res.writeHead(200, {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*', // Allow all origins
-            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS', // Allow methods
-            'Access-Control-Allow-Headers': 'Content-Type' // Allow headers
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type'
         });
         res.end(JSON.stringify(stockData));
     } else {
         res.writeHead(404, {
             'Content-Type': 'text/plain',
-            'Access-Control-Allow-Origin': '*' // Allow all origins
+            'Access-Control-Allow-Origin': '*'
         });
         res.end('Not Found');
     }
@@ -46,46 +48,43 @@ http.createServer(async (req, res) => {
     console.log('Proxy server running on port 8080');
 });
 
+// Create WebSocket server
+const server = http.createServer();
+const wss = new WebSocketServer({ server });
+let clients = [];
+
+wss.on('connection', (ws) => {
+    clients.push(ws);
+    ws.on('close', () => {
+        clients = clients.filter((client) => client !== ws);
+    });
+});
+
+// Launch Playwright and capture screenshots
 (async () => {
     const browser = await webkit.launch();
     const page = await browser.newPage();
-
     const htmlContent = fs.readFileSync('index.html', 'utf8');
-
     await page.setContent(htmlContent);
     await page.setViewportSize({ width: 96, height: 32 });
 
-    let frameCount = 0;
-    let firstScreenshotSaved = false;
-    let tenthScreenshotSaved = false;
-    let startTime = Date.now();
-
     async function captureScreenshot() {
-        frameCount++;
-
         const elementHandle = await page.$('#container');
         const boundingBox = await elementHandle.boundingBox();
-
         const screenshotBuffer = await page.screenshot({
-            encoding: 'binary',
+            encoding: 'base64',
             clip: boundingBox
         });
 
-        if (frameCount === 1 && !firstScreenshotSaved) {
-            fs.writeFileSync('screenshot1.png', screenshotBuffer);
-        } else if (frameCount === 10 && !tenthScreenshotSaved) {
-            fs.writeFileSync('screenshot10.png', screenshotBuffer);
-        }
+        const imageBuffer = Buffer.from(screenshotBuffer, 'base64');
 
-        const elapsedSeconds = (Date.now() - startTime) / 1000;
-        if (elapsedSeconds >= 1) {
-            const fps = frameCount / elapsedSeconds;
-            console.log(`FPS: ${fps.toFixed(2)}`);
-            frameCount = 0;
-            startTime = Date.now();
-        }
+        clients.forEach((client) => {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(imageBuffer);
+            }
+        });
 
-        setTimeout(captureScreenshot, 0); // Schedule next screenshot capture
+        setTimeout(captureScreenshot, 33); // Capture at ~30fps
     }
 
     captureScreenshot();
@@ -94,3 +93,7 @@ http.createServer(async (req, res) => {
         await browser.close();
     });
 })();
+
+server.listen(8081, () => {
+    console.log('WebSocket server running on port 8081');
+});

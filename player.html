@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=96, initial-scale=1.0">
+    <title>Canvas Screenshot</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: black;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        canvas {
+            image-rendering: pixelated;
+            width: 768px; /* 96 * 8 */
+            height: 256px; /* 32 * 8 */
+        }
+    </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const scale = 8; // Scale factor for better visibility
+
+    // Adjust canvas size
+    const width = 96;
+    const height = 32;
+    canvas.width = width;
+    canvas.height = height;
+
+    const ws = new WebSocket('ws://localhost:8081');
+
+    ws.binaryType = 'arraybuffer';
+
+    ws.onmessage = (event) => {
+        const arrayBuffer = new Uint8Array(event.data);
+        const blob = new Blob([arrayBuffer], { type: 'image/png' });
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+
+        img.onload = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(img, 0, 0);
+
+            // Scale the image for better visibility
+            const scaledCanvas = document.createElement('canvas');
+            scaledCanvas.width = canvas.width * scale;
+            scaledCanvas.height = canvas.height * scale;
+            const scaledCtx = scaledCanvas.getContext('2d');
+            scaledCtx.imageSmoothingEnabled = false;
+            scaledCtx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(scaledCanvas, 0, 0, canvas.width, canvas.height);
+        };
+
+        img.src = url;
+    };
+
+    ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+    };
+</script>
+</body>
+</html>

@@ -9,6 +9,7 @@
   "dependencies": {
     "cheerio": "^1.0.0-rc.10",
     "node-fetch": "^3.3.2",
-    "playwright": "^1.21.1"
+    "playwright": "^1.21.1",
+    "ws": "^8.18.0"
   }
 }
