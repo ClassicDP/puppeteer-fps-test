@@ -127,22 +127,6 @@ async function captureAndSendScreenshot() {
     }
 }
 
-// Function for preloading fonts and disabling animations
-async function preparePageForScreenshot(page) {
-    await page.evaluate(() => {
-        const style = document.createElement('style');
-        style.innerHTML = `
-            * {
-                animation: none !important;
-                transition: none !important;
-            }
-            input, textarea, select, button {
-                caret-color: transparent !important;
-            }
-        `;
-        document.head.appendChild(style);
-    });
-}
 
 // Launch Playwright and start screenshot loop
 let page;
@@ -151,7 +135,6 @@ let page;
     page = await browser.newPage();
     const htmlContent = fs.readFileSync('index.html', 'utf8');
     await page.setContent(htmlContent, { waitUntil: 'load', timeout: 1000 });
-    await preparePageForScreenshot(page);
     await page.setViewportSize({ width: 96, height: 32 });
 
     captureAndSendScreenshot(); // Start the screenshot loop
