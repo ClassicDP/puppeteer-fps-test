@@ -103,10 +103,10 @@
                 }
                 marquee.style.transform = `translateX(${pos>>0}px)`;
 
-                // Отправляем команду на сервер для снятия скриншота
-                if (ws.readyState === WebSocket.OPEN) {
-                    ws.send('captureScreenshot');
-                }
+                // // Отправляем команду на сервер для снятия скриншота
+                // if (ws.readyState === WebSocket.OPEN) {
+                //     ws.send('captureScreenshot');
+                // }
             }
             lastTime = currentTime;
             requestAnimationFrame(animate);

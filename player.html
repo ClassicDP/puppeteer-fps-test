@@ -38,8 +38,9 @@
     const ws = new WebSocket('ws://localhost:8081');
 
     ws.binaryType = 'arraybuffer';
-
+    let mCnt = 0;
     ws.onmessage = (event) => {
+        mCnt ++;
         const arrayBuffer = new Uint8Array(event.data);
         const blob = new Blob([arrayBuffer], { type: 'image/png' });
         const url = URL.createObjectURL(blob);
@@ -64,6 +65,8 @@
 
         img.src = url;
     };
+
+    setInterval(()=>{console.log(mCnt); mCnt =0;}, 1000)
 
     ws.onerror = (error) => {
         console.error('WebSocket error:', error);

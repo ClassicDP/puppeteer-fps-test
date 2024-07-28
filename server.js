@@ -1,10 +1,10 @@
-import {webkit} from 'playwright';
+import { webkit } from 'playwright';
 import fs from 'fs';
 import http from 'http';
 import cheerio from 'cheerio';
 import fetch from 'node-fetch';
-import WebSocket, {WebSocketServer} from 'ws';
-import * as os from "node:os";
+import WebSocket, { WebSocketServer } from 'ws';
+import * as os from 'node:os';
 
 const getStockData = async () => {
     try {
@@ -17,10 +17,10 @@ const getStockData = async () => {
             return element.find('Value').text();
         };
 
-        const usdRate = getValue("USD");
-        const cnyRate = getValue("CNY");
+        const usdRate = getValue('USD');
+        const cnyRate = getValue('CNY');
 
-        return {usdRate, cnyRate};
+        return { usdRate, cnyRate };
     } catch (error) {
         console.error('Error fetching stock data:', error);
         return null;
@@ -35,13 +35,13 @@ const proxyServer = http.createServer(async (req, res) => {
             'Content-Type': 'application/json',
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type'
+            'Access-Control-Allow-Headers': 'Content-Type',
         });
         res.end(JSON.stringify(stockData));
     } else {
         res.writeHead(404, {
             'Content-Type': 'text/plain',
-            'Access-Control-Allow-Origin': '*'
+            'Access-Control-Allow-Origin': '*',
         });
         res.end('Not Found');
     }
@@ -51,38 +51,15 @@ const proxyServer = http.createServer(async (req, res) => {
 
 // Create WebSocket server
 const server = http.createServer();
-const wss = new WebSocketServer({server});
+const wss = new WebSocketServer({ server });
 let clients = [];
 
 let screenshotTimes = [];
 let sendTimes = [];
+let sendCountPerSec = 0;
 
 wss.on('connection', (ws) => {
     clients.push(ws);
-    ws.on('message', async (message) => {
-        if (message.toString() === 'captureScreenshot') {
-            const startScreenshot = Date.now();
-            const elementHandle = await page.$('#container');
-            const boundingBox = await elementHandle.boundingBox();
-
-            const screenshotBuffer = await page.screenshot({
-                encoding: 'base64',
-                clip: boundingBox
-            });
-            const endScreenshot = Date.now();
-            screenshotTimes.push(endScreenshot - startScreenshot);
-
-            const imageBuffer = Buffer.from(screenshotBuffer, 'base64');
-            const startSend = Date.now();
-            clients.forEach((client) => {
-                if (client.readyState === WebSocket.OPEN) {
-                    client.send(imageBuffer);
-                }
-            });
-            const endSend = Date.now();
-            sendTimes.push(endSend - startSend);
-        }
-    });
     ws.on('close', () => {
         clients = clients.filter((client) => client !== ws);
     });
@@ -95,15 +72,17 @@ function logAverageTimes() {
         console.log(`Average Screenshot Time: ${averageScreenshotTime.toFixed(2)}ms`);
         console.log(`Screenshot Count per sec: ${screenshotTimes.length}`);
         console.log(`Average Send Time: ${averageSendTime.toFixed(2)}ms`);
+        console.log(`Send Count to free WebSocket per sec: ${sendCountPerSec}`);
         screenshotTimes = [];
         sendTimes = [];
+        sendCountPerSec = 0;
         // Получение общей памяти системы в байтах
         const totalMemory = os.totalmem();
 
-// Получение свободной памяти системы в байтах
+        // Получение свободной памяти системы в байтах
         const freeMemory = os.freemem();
 
-// Вывод информации в консоль
+        // Вывод информации в консоль
         console.log(`Общая память: ${totalMemory} байт`);
         console.log(`Свободная память: ${freeMemory} байт`);
     }
@@ -111,14 +90,71 @@ function logAverageTimes() {
 
 setInterval(logAverageTimes, 1000);
 
-// Launch Playwright and capture screenshots
+// Function to check if WebSocket buffer is empty
+function isWebSocketBufferEmpty(ws) {
+    return ws.bufferedAmount === 0;
+}
+
+// Function to capture screenshot and send to WebSocket clients
+async function captureAndSendScreenshot() {
+    try {
+        const startScreenshot = Date.now();
+        const elementHandle = await page.$('#container');
+        const boundingBox = await elementHandle.boundingBox();
+        const screenshotBuffer = await page.screenshot({
+            encoding: 'base64',
+            clip: boundingBox,
+            timeout: 30000, // Increase timeout if needed
+        });
+        const endScreenshot = Date.now();
+        screenshotTimes.push(endScreenshot - startScreenshot);
+
+        const imageBuffer = Buffer.from(screenshotBuffer, 'base64');
+        const startSend = Date.now();
+        clients.forEach((client) => {
+            if (client.readyState === WebSocket.OPEN && isWebSocketBufferEmpty(client)) {
+                client.send(imageBuffer);
+                sendCountPerSec++;
+            }
+        });
+        const endSend = Date.now();
+        sendTimes.push(endSend - startSend);
+
+        // Schedule the next screenshot
+        setTimeout(captureAndSendScreenshot, 0); // Capture as fast as possible
+    } catch (error) {
+        console.error('Error capturing screenshot:', error);
+    }
+}
+
+// Function for preloading fonts and disabling animations
+async function preparePageForScreenshot(page) {
+    await page.evaluate(() => {
+        const style = document.createElement('style');
+        style.innerHTML = `
+            * {
+                animation: none !important;
+                transition: none !important;
+            }
+            input, textarea, select, button {
+                caret-color: transparent !important;
+            }
+        `;
+        document.head.appendChild(style);
+    });
+}
+
+// Launch Playwright and start screenshot loop
 let page;
 (async () => {
     const browser = await webkit.launch();
     page = await browser.newPage();
     const htmlContent = fs.readFileSync('index.html', 'utf8');
-    await page.setContent(htmlContent);
-    await page.setViewportSize({width: 96, height: 32});
+    await page.setContent(htmlContent, { waitUntil: 'load', timeout: 1000 });
+    await preparePageForScreenshot(page);
+    await page.setViewportSize({ width: 96, height: 32 });
+
+    captureAndSendScreenshot(); // Start the screenshot loop
 
     process.on('exit', async () => {
         await browser.close();
