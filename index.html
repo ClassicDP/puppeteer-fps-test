@@ -35,15 +35,19 @@
             -webkit-text-fill-color: transparent;
             animation: rainbow 4s linear infinite;
         }
+        .marquee-wrapper {
+            width: 96px;
+            height: 16px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+        }
         #stock {
             font-size: 8pt;
             font-weight: normal;
             color: white;
             white-space: nowrap;
-            width: 100%;
-            box-sizing: border-box;
             position: absolute;
-            bottom: 0;
         }
         @keyframes rainbow {
             0% {
@@ -54,11 +58,15 @@
             }
         }
     </style>
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" as="style">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 </head>
 <body>
 <div id="container">
     <div id="time">Loading...</div>
-    <marquee id="stock" direction="left" scrollamount="2">Loading stock...</marquee>
+    <div class="marquee-wrapper">
+        <div id="stock">Loading stock...</div>
+    </div>
 </div>
 <script>
     function updateTime() {
@@ -72,15 +80,51 @@
         try {
             const response = await fetch('http://localhost:8080/stock');
             const data = await response.json();
-            document.getElementById('stock').innerHTML = `USD to RUB: ${data.usdRate} | CNY to RUB: ${data.cnyRate}`;
+            document.getElementById('stock').textContent = `USD to RUB: ${data.usdRate} | CNY to RUB: ${data.cnyRate}`;
+            startMarquee();
         } catch (error) {
-            document.getElementById('stock').innerHTML = 'Error loading stock';
+            document.getElementById('stock').textContent = 'Error loading stock';
         }
     }
 
-    requestAnimationFrame(updateTime);
-    setInterval(updateStock, 60000); // Update stock prices every 60 seconds
-    updateStock(); // Initial stock update
+    function startMarquee() {
+        const marquee = document.getElementById('stock');
+        const wrapper = document.querySelector('.marquee-wrapper');
+        let pos = wrapper.offsetWidth;
+        const speed = 30; // скорость прокрутки в пикселях в секунду
+        let lastTime = null;
+
+        function animate(currentTime) {
+            if (lastTime !== null) {
+                const deltaTime = (currentTime - lastTime) / 1000; // Время в секундах
+                pos -= speed * deltaTime;
+                if (pos < -marquee.offsetWidth) {
+                    pos = wrapper.offsetWidth;
+                }
+                marquee.style.transform = `translateX(${pos>>0}px)`;
+
+                // Отправляем команду на сервер для снятия скриншота
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send('captureScreenshot');
+                }
+            }
+            lastTime = currentTime;
+            requestAnimationFrame(animate);
+        }
+        requestAnimationFrame(animate);
+    }
+
+    const ws = new WebSocket('ws://localhost:8081');
+
+    ws.onopen = () => {
+        requestAnimationFrame(updateTime);
+        setInterval(updateStock, 60000); // Обновляем курсы валют каждые 60 секунд
+        updateStock(); // Начальное обновление курсов валют
+    };
+
+    ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+    };
 </script>
 </body>
 </html>
