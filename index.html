@@ -73,7 +73,7 @@
         const now = new Date();
         const timeString = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}.${String(now.getMilliseconds()).padStart(3, '0')}`;
         document.getElementById('time').textContent = timeString;
-        requestAnimationFrame(updateTime);
+        setTimeout(updateTime, 10); // Обновляем время каждые 10 мсек
     }
 
     async function updateStock() {
@@ -90,34 +90,34 @@
     function startMarquee() {
         const marquee = document.getElementById('stock');
         const wrapper = document.querySelector('.marquee-wrapper');
-        let pos = wrapper.offsetWidth;
         const speed = 30; // скорость прокрутки в пикселях в секунду
-        let lastTime = null;
+        const marqueeWidth = marquee.offsetWidth;
+        const wrapperWidth = wrapper.offsetWidth;
+        const totalWidth = wrapperWidth + marqueeWidth;
+        const startTime = Date.now();
 
-        function animate(currentTime) {
-            if (lastTime !== null) {
-                const deltaTime = (currentTime - lastTime) / 1000; // Время в секундах
-                pos -= speed * deltaTime;
-                if (pos < -marquee.offsetWidth) {
-                    pos = wrapper.offsetWidth;
-                }
-                marquee.style.transform = `translateX(${pos>>0}px)`;
+        function animate() {
+            const currentTime = Date.now();
+            const elapsedTime = (currentTime - startTime) / 1000; // Время в секундах
+            const distance = (elapsedTime * speed) % totalWidth;
+            const pos = wrapperWidth - distance;
+            marquee.style.transform = `translateX(${pos>>0}px)`;
 
-                // // Отправляем команду на сервер для снятия скриншота
-                // if (ws.readyState === WebSocket.OPEN) {
-                //     ws.send('captureScreenshot');
-                // }
+            // Отправляем команду на сервер для снятия скриншота
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send('captureScreenshot');
             }
-            lastTime = currentTime;
+
             requestAnimationFrame(animate);
         }
+
         requestAnimationFrame(animate);
     }
 
     const ws = new WebSocket('ws://localhost:8081');
 
     ws.onopen = () => {
-        requestAnimationFrame(updateTime);
+        updateTime();
         setInterval(updateStock, 60000); // Обновляем курсы валют каждые 60 секунд
         updateStock(); // Начальное обновление курсов валют
     };
