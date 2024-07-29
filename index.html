@@ -73,14 +73,14 @@
         const now = new Date();
         const timeString = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}.${String(now.getMilliseconds()).padStart(3, '0')}`;
         document.getElementById('time').textContent = timeString;
-        setTimeout(updateTime, 10); // Обновляем время каждые 10 мсек
+        setTimeout(updateTime, 10); // Update time every 10ms
     }
 
     async function updateStock() {
         try {
-            const response = await fetch('http://localhost:8080/stock');
+            const response = await fetch('https://api.coindesk.com/v1/bpi/currentprice/BTC.json');
             const data = await response.json();
-            document.getElementById('stock').textContent = `USD to RUB: ${data.usdRate} | CNY to RUB: ${data.cnyRate}`;
+            document.getElementById('stock').textContent = `BTC to USD: ${data.bpi.USD.rate}`;
             startMarquee();
         } catch (error) {
             document.getElementById('stock').textContent = 'Error loading stock';
@@ -90,7 +90,7 @@
     function startMarquee() {
         const marquee = document.getElementById('stock');
         const wrapper = document.querySelector('.marquee-wrapper');
-        const speed = 30; // скорость прокрутки в пикселях в секунду
+        const speed = 30; // Speed in pixels per second
         const marqueeWidth = marquee.offsetWidth;
         const wrapperWidth = wrapper.offsetWidth;
         const totalWidth = wrapperWidth + marqueeWidth;
@@ -98,12 +98,12 @@
 
         function animate() {
             const currentTime = Date.now();
-            const elapsedTime = (currentTime - startTime) / 1000; // Время в секундах
+            const elapsedTime = (currentTime - startTime) / 1000; // Time in seconds
             const distance = (elapsedTime * speed) % totalWidth;
             const pos = wrapperWidth - distance;
-            marquee.style.transform = `translateX(${pos>>0}px)`;
+            marquee.style.transform = `translateX(${pos >> 0}px)`;
 
-            // Отправляем команду на сервер для снятия скриншота
+            // Send command to server for screenshot
             if (ws.readyState === WebSocket.OPEN) {
                 ws.send('captureScreenshot');
             }
@@ -118,8 +118,8 @@
 
     ws.onopen = () => {
         updateTime();
-        setInterval(updateStock, 60000); // Обновляем курсы валют каждые 60 секунд
-        updateStock(); // Начальное обновление курсов валют
+        setInterval(updateStock, 60000); // Update stock prices every 60 seconds
+        updateStock(); // Initial stock update
     };
 
     ws.onerror = (error) => {

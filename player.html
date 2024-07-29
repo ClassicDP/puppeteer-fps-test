@@ -13,58 +13,87 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            flex-direction: column; /* Arrange items in a column */
             height: 100vh;
+            color: white; /* Text color for debugging info */
+            font-family: "Courier New", monospace; /* Font for debugging info */
+            font-size: 10px; /* Font size for debugging info */
         }
         canvas {
             image-rendering: pixelated;
-            width: 768px; /* 96 * 8 */
-            height: 256px; /* 32 * 8 */
+            border: 1px solid gray; /* Thin gray border */
+        }
+        #debug {
+            margin-top: 10px;
         }
     </style>
 </head>
 <body>
 <canvas id="canvas"></canvas>
+<div id="debug">
+    Timestamp: <span id="timestamp">N/A</span> | Delta: <span id="delta">N/A</span>
+</div>
 <script>
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
+    const timestampSpan = document.getElementById('timestamp');
+    const deltaSpan = document.getElementById('delta');
     const scale = 8; // Scale factor for better visibility
 
-    // Adjust canvas size
     const width = 96;
     const height = 32;
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = width * scale;
+    canvas.height = height * scale;
 
     const ws = new WebSocket('ws://localhost:8081');
-
-    ws.binaryType = 'arraybuffer';
+    const frameBuffer = [];
+    const bufferLimit = 10;
+    let referenceTime = null;
 
     ws.onmessage = (event) => {
-        const arrayBuffer = new Uint8Array(event.data);
-        const blob = new Blob([arrayBuffer], { type: 'image/png' });
-        const url = URL.createObjectURL(blob);
-        const img = new Image();
+        const frame = JSON.parse(event.data);
+        frameBuffer.push(frame);
 
-        img.onload = () => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.imageSmoothingEnabled = false;
-            ctx.drawImage(img, 0, 0);
-
-            // Scale the image for better visibility
-            const scaledCanvas = document.createElement('canvas');
-            scaledCanvas.width = canvas.width * scale;
-            scaledCanvas.height = canvas.height * scale;
-            const scaledCtx = scaledCanvas.getContext('2d');
-            scaledCtx.imageSmoothingEnabled = false;
-            scaledCtx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
-
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(scaledCanvas, 0, 0, canvas.width, canvas.height);
-        };
-
-        img.src = url;
+        if (frameBuffer.length > bufferLimit) {
+            frameBuffer.shift();
+        }
     };
 
+    function displayFrame() {
+        if (frameBuffer.length > 0) {
+            const frame = frameBuffer.shift();
+            const currentTime = Date.now();
+            const frameTime = new Date(frame.timestamp).getTime();
+
+            if (referenceTime === null) {
+                referenceTime = frameTime;
+            }
+
+            const deltaTime = currentTime - frameTime;
+            const referenceDelta = frameTime - referenceTime;
+
+            if (currentTime >= frameTime) {
+                const image = new Image();
+                image.src = `data:image/png;base64,${frame.imageBuffer}`;
+                image.onload = () => {
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+                };
+
+                // Update debug info
+                timestampSpan.textContent = `${new Date(frame.timestamp).toISOString().substr(14, 9)}`;
+                deltaSpan.textContent = `${referenceDelta} ms`;
+            } else {
+                frameBuffer.unshift(frame); // Reinsert frame if it's not yet time to display it
+            }
+        }
+        requestAnimationFrame(displayFrame);
+    }
+
+    ws.onopen = () => {
+        displayFrame();
+    };
 
     ws.onerror = (error) => {
         console.error('WebSocket error:', error);
