@@ -19,10 +19,12 @@
             font-family: "Courier New", monospace; /* Font for debugging info */
             font-size: 10px; /* Font size for debugging info */
         }
+
         canvas {
             image-rendering: pixelated;
             border: 1px solid gray; /* Thin gray border */
         }
+
         #debug {
             margin-top: 10px;
         }
@@ -48,52 +50,56 @@
     const ws = new WebSocket('ws://localhost:8081');
     const frameBuffer = [];
     const bufferLimit = 10;
-    let referenceTime = null;
-
+    let frames = 0;
+    let deltaTime = 0;
     ws.onmessage = (event) => {
         const frame = JSON.parse(event.data);
-        frameBuffer.push(frame);
-
+        if (!frame.timeStamp) return;
+        let frameTime = new Date(frame.timeStamp).getTime();
+        frameBuffer.push({frame, frames});
+        if ((frames % bufferLimit) === 0) {
+            deltaTime = Date.now() - frameTime;
+        }
+        frames++;
         if (frameBuffer.length > bufferLimit) {
             frameBuffer.shift();
+            // console.log('buf')
         }
     };
+
+    let currentTime = Date.now();
 
     function displayFrame() {
         if (frameBuffer.length > 0) {
             const frame = frameBuffer.shift();
-            const currentTime = Date.now();
-            const frameTime = new Date(frame.timestamp).getTime();
+            let frameTime = new Date(frame.frame.timeStamp).getTime();
+            const referenceTime = frameTime + deltaTime;
+            currentTime = Date.now() - 100;
 
-            if (referenceTime === null) {
-                referenceTime = frameTime;
-            }
-
-            const deltaTime = currentTime - frameTime;
-            const referenceDelta = frameTime - referenceTime;
-
-            if (currentTime >= frameTime) {
+            if (true || (currentTime >= referenceTime)) {
                 const image = new Image();
-                image.src = `data:image/png;base64,${frame.imageBuffer}`;
+                image.src = `data:image/png;base64,${frame.frame.imageBuffer}`;
+                // Update debug info
+                deltaSpan.textContent = `${deltaTime} ms, frame #${frame.frames}`;
+                ctx.imageSmoothingEnabled = false;
                 image.onload = () => {
-                    ctx.imageSmoothingEnabled = false;
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+
                 };
 
-                // Update debug info
-                timestampSpan.textContent = `${new Date(frame.timestamp).toISOString().substr(14, 9)}`;
-                deltaSpan.textContent = `${referenceDelta} ms`;
             } else {
                 frameBuffer.unshift(frame); // Reinsert frame if it's not yet time to display it
+                deltaSpan.textContent = currentTime - referenceTime;
             }
+            timestampSpan.textContent = `${new Date(frame.frame.timeStamp).toISOString().substr(14, 9)} #${frame.frames}`;
+
         }
-        requestAnimationFrame(displayFrame);
+        setTimeout(displayFrame, 0);
+
     }
 
-    ws.onopen = () => {
-        displayFrame();
-    };
+    displayFrame();
 
     ws.onerror = (error) => {
         console.error('WebSocket error:', error);

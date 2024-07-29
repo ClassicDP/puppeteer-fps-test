@@ -42,17 +42,21 @@ async function captureAndSendScreenshot() {
         const startScreenshot = Date.now();
         const elementHandle = await page.$('#container');
         const boundingBox = await elementHandle.boundingBox();
+        const timeStamp = await page.evaluate(() => {
+            return window.timeStamp;
+        });
         const screenshotBuffer = await page.screenshot({
             encoding: 'base64',
             clip: boundingBox,
             timeout: 30000
         });
+
         const endScreenshot = Date.now();
         screenshotTimes.push(endScreenshot - startScreenshot);
 
         const imageBuffer = Buffer.from(screenshotBuffer, 'base64');
         const frame = {
-            timestamp: Date.now(),
+            timeStamp: timeStamp,
             imageBuffer: imageBuffer.toString('base64')
         };
         const frameString = JSON.stringify(frame);
@@ -76,7 +80,7 @@ let page;
     await page.setContent(htmlContent, { waitUntil: 'load', timeout: 1000 });
     await page.setViewportSize({ width: 96, height: 32 });
 
-    setInterval(captureAndSendScreenshot, 1000 / 30);
+    setInterval(captureAndSendScreenshot, 1000 / 60);
 
     process.on('exit', async () => {
         await browser.close();

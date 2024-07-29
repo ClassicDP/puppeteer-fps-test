@@ -69,11 +69,10 @@
     </div>
 </div>
 <script>
-    function updateTime() {
-        const now = new Date();
+    function updateTime(now) {
+        now = new Date(now)
         const timeString = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}.${String(now.getMilliseconds()).padStart(3, '0')}`;
         document.getElementById('time').textContent = timeString;
-        setTimeout(updateTime, 10); // Update time every 10ms
     }
 
     async function updateStock() {
@@ -87,6 +86,8 @@
         }
     }
 
+
+
     function startMarquee() {
         const marquee = document.getElementById('stock');
         const wrapper = document.querySelector('.marquee-wrapper');
@@ -98,16 +99,16 @@
 
         function animate() {
             const currentTime = Date.now();
+            updateTime(currentTime);
             const elapsedTime = (currentTime - startTime) / 1000; // Time in seconds
             const distance = (elapsedTime * speed) % totalWidth;
             const pos = wrapperWidth - distance;
             marquee.style.transform = `translateX(${pos >> 0}px)`;
-
+            window.timeStamp = currentTime;
             // Send command to server for screenshot
             if (ws.readyState === WebSocket.OPEN) {
                 ws.send('captureScreenshot');
             }
-
             requestAnimationFrame(animate);
         }
 
@@ -117,7 +118,7 @@
     const ws = new WebSocket('ws://localhost:8081');
 
     ws.onopen = () => {
-        updateTime();
+        updateTime(Date.now())
         setInterval(updateStock, 60000); // Update stock prices every 60 seconds
         updateStock(); // Initial stock update
     };
