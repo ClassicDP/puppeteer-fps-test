@@ -26,9 +26,17 @@ let sendCountPerSec = 0;
 
 wss.on('connection', (ws) => {
     clients.push(ws);
+    console.log('connected ws')
     ws.on('close', () => {
         clients = clients.filter((client) => client !== ws);
     });
+    ws.on('message', async (message) => {
+        let msg = JSON.parse(message);
+        timeStamp = msg.timeStamp;
+        if (timeStamp)
+            await wait(5);
+            await captureAndSendScreenshot();
+    })
 });
 
 function logAverageTimes() {
@@ -36,15 +44,15 @@ function logAverageTimes() {
 }
 
 setInterval(logAverageTimes, 1000);
-
+function wait(ms) {
+    return new Promise((res) => setTimeout(res, ms));
+}
+let timeStamp;
 async function captureAndSendScreenshot() {
     try {
         const startScreenshot = Date.now();
         const elementHandle = await page.$('#container');
         const boundingBox = await elementHandle.boundingBox();
-        const timeStamp = await page.evaluate(() => {
-            return window.timeStamp;
-        });
         const screenshotBuffer = await page.screenshot({
             encoding: 'base64',
             clip: boundingBox,
@@ -80,7 +88,6 @@ let page;
     await page.setContent(htmlContent, { waitUntil: 'load', timeout: 1000 });
     await page.setViewportSize({ width: 96, height: 32 });
 
-    setInterval(captureAndSendScreenshot, 1000 / 60);
 
     process.on('exit', async () => {
         await browser.close();

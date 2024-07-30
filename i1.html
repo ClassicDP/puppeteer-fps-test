@@ -13,7 +13,6 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            flex-direction: column; /* Arrange items in a column */
             height: 100vh;
             color: white;
             font-family: "Courier New", monospace;
@@ -51,7 +50,7 @@
 
     const ws = new WebSocket('ws://localhost:8081');
     const frameBuffer = [];
-    const bufferLimit = 100;
+    const bufferLimit = 20;
     let deltaTime = 0;
     let frameCount = 0;
     let referenceFrameTime = 0;
