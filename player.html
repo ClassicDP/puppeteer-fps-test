@@ -76,7 +76,7 @@
     };
 
     function displayFrame() {
-        if (frameBuffer.length > 0) {
+        if (frameBuffer.length > 10) {
             const frame = frameBuffer.shift();
             const frameTime = new Date(frame.timeStamp).getTime();
             const currentTime = Date.now();

@@ -98,7 +98,7 @@
     function startMarquee() {
         const marquee = document.getElementById('stock');
         const wrapper = document.querySelector('.marquee-wrapper');
-        const speed = 36; // Speed in pixels per second
+        const speed = 25; // Speed in pixels per second
         let marqueeWidth = marquee.offsetWidth;
         const wrapperWidth = wrapper.offsetWidth;
         let totalWidth = wrapperWidth + marqueeWidth;
@@ -122,11 +122,10 @@
             if (ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({timeStamp: currentTime}));
             }
-            await wait(1000 / speed);
+            let x = Date.now() % (1000 / speed)
+            console.log(x)
 
-
-
-            requestAnimationFrame(animate);
+            setTimeout(animate, x);
         }
 
         requestAnimationFrame(animate);
