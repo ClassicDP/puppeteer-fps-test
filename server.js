@@ -40,7 +40,7 @@ let page;
         await browser.close();
     });
 })();
-
+let fps=0;
 async function captureAndSendScreenshot() {
     try {
         const elementHandle = await page.waitForSelector('#container');
@@ -48,7 +48,7 @@ async function captureAndSendScreenshot() {
         const screenshotBuffer = await page.screenshot({
             encoding: 'base64',
             clip: boundingBox,
-            timeout: 30
+            timeout: 100
         });
 
         const imageBuffer = Buffer.from(screenshotBuffer, 'base64');
@@ -63,10 +63,13 @@ async function captureAndSendScreenshot() {
                 client.send(frameString);
             }
         });
+        fps++;
     } catch (error) {
         console.error(`Error capturing screenshot: ${timeStamp}`, error);
     }
 }
+
+setInterval(()=>{console.log("fps: ", fps); fps =0;},1000);
 
 server.listen(8081, () => {
     console.log('WebSocket server running on port 8081');

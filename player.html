@@ -33,13 +33,15 @@
 <body>
 <canvas id="canvas"></canvas>
 <div id="debug">
-    Timestamp: <span id="timestamp">N/A</span> | Delta: <span id="delta">N/A</span>
+    Timestamp: <span id="timestamp">N/A</span> | Delta: <span id="delta">N/A</span> | fps: <span id="fps">N/A</span>
 </div>
 <script>
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     const timestampSpan = document.getElementById('timestamp');
     const deltaSpan = document.getElementById('delta');
+    const fpsSpan = document.getElementById('fps');
+
     const scale = 8;
 
     const width = 96;
@@ -67,7 +69,7 @@
         }
     }
 
-    const ws = new WebSocket('ws://localhost:8081');
+    const ws = new WebSocket('ws://192.168.1.85:8081');
     const frameBuffer = [];
     const bufferLimit = 100;
 
@@ -93,6 +95,7 @@
         frameCount++;
     };
 
+    let fps = 0;
     function displayFrame() {
         if (frameBuffer.length > 10) {
             const frame = frameBuffer.shift();
@@ -101,6 +104,7 @@
             const expectedDisplayTime = referenceWallTime + (frameTime - referenceFrameTime);
 
             if (currentTime >= expectedDisplayTime || expectedDisplayTime - currentTime > 250 ) {
+                fps++;
                 const image = new Image();
                 image.src = `data:image/png;base64,${frame.imageBuffer}`;
 
@@ -123,9 +127,12 @@
         requestAnimationFrame(displayFrame);
     }
 
+    setInterval(()=>{fpsSpan.textContent = fps; fps = 0},1000)
+
     function wait(ms) {
         return new Promise((res) => setTimeout(res, ms));
     }
+
 
 
     ws.onopen = async () => {
