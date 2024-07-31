@@ -79,7 +79,7 @@
     }
 
     function updateTime(now) {
-        now = new Date(now)
+        now = new Date(now);
         const timeString = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}.${String(now.getMilliseconds()).padStart(3, '0')}`;
         document.getElementById('time').textContent = timeString;
     }
@@ -98,34 +98,46 @@
     function startMarquee() {
         const marquee = document.getElementById('stock');
         const wrapper = document.querySelector('.marquee-wrapper');
-        const speed = 25; // Speed in pixels per second
+        const speed = 30; // Speed in pixels per second
         let marqueeWidth = marquee.offsetWidth;
         const wrapperWidth = wrapper.offsetWidth;
         let totalWidth = wrapperWidth + marqueeWidth;
         let pos = wrapperWidth;
         let lastTime = Date.now();
+        const fps = 2 * speed; // Target frames per second
+        const frameDuration = 1000 / fps;
 
         async function animate() {
             const currentTime = Date.now();
-            updateTime(currentTime);
-            pos--;
-            if (pos + marqueeWidth < 0) {
-                pos = wrapperWidth;
-                // Update the width of the marquee after text change
-                marqueeWidth = marquee.offsetWidth;
-                totalWidth = wrapperWidth + marqueeWidth;
-            }
-            marquee.style.transform = `translateX(${Math.round(pos)}px)`;
-            lastTime = currentTime;
-            window.timeStamp = currentTime;
-            // Send command to server for screenshot
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({timeStamp: currentTime}));
-            }
-            let x = Date.now() % (1000 / speed)
-            console.log(x)
+            const elapsedTime = currentTime - lastTime;
 
-            setTimeout(animate, x);
+            if (1 || elapsedTime > frameDuration) {
+                updateTime(currentTime);
+                pos -= speed * (elapsedTime / 1000); // Move position based on elapsed time
+                if (pos + marqueeWidth < 0) {
+                    pos = wrapperWidth;
+                    marqueeWidth = marquee.offsetWidth;
+                    totalWidth = wrapperWidth + marqueeWidth;
+                }
+                marquee.style.transform = `translateX(${Math.round(pos)}px)`;
+                lastTime = currentTime;
+                window.timeStamp = currentTime;
+
+                // Send command to server for screenshot
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({timeStamp: window.timeStamp}));
+
+                }
+                // Wait for confirmation from the server that screenshot is taken
+                const confirmation = await new Promise((resolve) => {
+                    ws.onmessage = (message) => {
+                        if (message.data.toString() === 'screenshot_done')
+                            resolve(message.data);
+                    }
+                });
+            }
+
+            requestAnimationFrame(animate);
         }
 
         requestAnimationFrame(animate);
