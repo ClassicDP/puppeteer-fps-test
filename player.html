@@ -70,7 +70,7 @@
     const ws = new WebSocket('ws://localhost:8081');
     const frameBuffer = [];
     const bufferLimit = 100;
-    let deltaTime = 0;
+
     let frameCount = 0;
     let referenceFrameTime = 0;
     let referenceWallTime = 0;
@@ -100,7 +100,7 @@
             const currentTime = Date.now();
             const expectedDisplayTime = referenceWallTime + (frameTime - referenceFrameTime);
 
-            if (currentTime >= expectedDisplayTime) {
+            if (currentTime >= expectedDisplayTime || expectedDisplayTime - currentTime > 250 ) {
                 const image = new Image();
                 image.src = `data:image/png;base64,${frame.imageBuffer}`;
 
@@ -123,7 +123,12 @@
         requestAnimationFrame(displayFrame);
     }
 
-    ws.onopen = () => {
+    function wait(ms) {
+        return new Promise((res) => setTimeout(res, ms));
+    }
+
+
+    ws.onopen = async () => {
         displayFrame();
     };
 
